@@ -1,10 +1,10 @@
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     Illegal,
     EOF,
     // 識別子・リテラル
-    IDENT,
-    INT,
+    IDENT(String),
+    INT(i32),
 
     // 演算子
     ASSIGN,
