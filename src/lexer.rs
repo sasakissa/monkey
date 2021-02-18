@@ -45,24 +45,62 @@ impl<'a> Lexer<'a> {
 
         return res;
     }
-    // 次のトークンを返す
+    // 現在位置のliterarlを読み込んでintを返す
+    fn read_number(&mut self) -> i32 {
+        let mut res = String::new();
+        while self.cur.is_ascii_digit() {
+            let c = self.read_char();
+            res += c.to_string().as_ref();
+        }
+        res.parse::<i32>().unwrap()
+    }
+    // 次のトークンを返すｓ
     fn next_token(&mut self) -> Token {
         self.skip_whitespace();
+        println!("{}", self.cur);
         let token = match self.cur {
-            '=' => Token::ASSIGN,
-            ';' => Token::SEMICOLON,
-            '(' => Token::LPAREN,
-            ')' => Token::RPAREN,
-            ',' => Token::COMMA,
-            '+' => Token::PLUS,
-            '{' => Token::LBRRACE,
-            '}' => Token::RBRACE,
+            '=' => {
+                self.read_char();
+                Token::ASSIGN
+            }
+            ';' => {
+                self.read_char();
+                Token::SEMICOLON
+            }
+            '(' => {
+                self.read_char();
+                Token::LPAREN
+            }
+            ')' => {
+                self.read_char();
+                Token::RPAREN
+            }
+            ',' => {
+                self.read_char();
+                Token::COMMA
+            }
+            '+' => {
+                self.read_char();
+                Token::PLUS
+            }
+            '{' => {
+                self.read_char();
+                Token::LBRRACE
+            }
+            '}' => {
+                self.read_char();
+                Token::RBRACE
+            }
             '\u{0}' => Token::EOF,
             _ => {
                 if is_letter(self.cur) {
                     let literal = self.read_identifier();
                     let token = lookup_ident(&literal);
-                    token
+                    return token;
+                } else if self.cur.is_ascii_digit() {
+                    let num = self.read_number();
+                    let token = Token::INT(num);
+                    return token;
                 } else {
                     Token::Illegal
                 }
@@ -113,6 +151,7 @@ mod tests {
             Token::IDENT("ten".to_string()),
             Token::ASSIGN,
             Token::INT(10),
+            Token::SEMICOLON,
             Token::LET,
             Token::IDENT("add".to_string()),
             Token::ASSIGN,
@@ -132,6 +171,8 @@ mod tests {
             Token::LET,
             Token::IDENT("result".to_string()),
             Token::ASSIGN,
+            Token::IDENT("add".to_string()),
+            Token::LPAREN,
             Token::IDENT("five".to_string()),
             Token::COMMA,
             Token::IDENT("ten".to_string()),
