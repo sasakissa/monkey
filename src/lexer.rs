@@ -29,6 +29,11 @@ impl<'a> Lexer<'a> {
         c
     }
 
+    // 次の文字を読む
+    fn peek_char(&self) -> char {
+        self.peek
+    }
+
     // 空白文字を読み飛ばす
     fn skip_whitespace(&mut self) {
         while self.cur == ' ' || self.cur == '\t' || self.cur == '\n' || self.cur == '\r' {
@@ -60,8 +65,44 @@ impl<'a> Lexer<'a> {
         println!("{}", self.cur);
         let token = match self.cur {
             '=' => {
+                if self.peek_char() == '=' {
+                    self.read_char();
+                    self.read_char();
+                    Token::EQ
+                } else {
+                    self.read_char();
+                    Token::ASSIGN
+                }
+            }
+            '+' => {
                 self.read_char();
-                Token::ASSIGN
+                Token::PLUS
+            }
+            '-' => {
+                self.read_char();
+                Token::MINUS
+            }
+            '!' => {
+                if self.peek_char() == '=' {
+                    self.read_char();
+                    self.read_char();
+                    Token::NOT_EQ
+                } else {
+                    self.read_char();
+                    Token::BANG
+                }
+            }
+            '*' => {
+                self.read_char();
+                Token::ASTERISK
+            }
+            '<' => {
+                self.read_char();
+                Token::LT
+            }
+            '>' => {
+                self.read_char();
+                Token::GT
             }
             ';' => {
                 self.read_char();
@@ -79,9 +120,9 @@ impl<'a> Lexer<'a> {
                 self.read_char();
                 Token::COMMA
             }
-            '+' => {
+            '/' => {
                 self.read_char();
-                Token::PLUS
+                Token::SLASH
             }
             '{' => {
                 self.read_char();
@@ -117,6 +158,11 @@ fn keywords(keyword: &String) -> Option<Token> {
     match keyword.as_ref() {
         "fn" => Some(Token::FUNCTION),
         "let" => Some(Token::LET),
+        "true" => Some(Token::TRUE),
+        "false" => Some(Token::FALSE),
+        "if" => Some(Token::IF),
+        "else" => Some(Token::ELSE),
+        "return" => Some(Token::RETURN),
         _ => None,
     }
 }
@@ -140,7 +186,17 @@ mod tests {
         let add = fn(x, y) {
          x + y;
         };
-        let result = add(five, ten);";
+        let result = add(five, ten);
+        !-/*5;
+        5 < 10 > 5;
+        if (5 < 10) {
+            return true;
+           } else {
+            return false;
+           }
+        10 == 10;
+        10 != 9;
+        ";
         let tests = vec![
             Token::LET,
             Token::IDENT("five".to_string()),
@@ -177,6 +233,43 @@ mod tests {
             Token::COMMA,
             Token::IDENT("ten".to_string()),
             Token::RPAREN,
+            Token::SEMICOLON,
+            Token::BANG,
+            Token::MINUS,
+            Token::SLASH,
+            Token::ASTERISK,
+            Token::INT(5),
+            Token::SEMICOLON,
+            Token::INT(5),
+            Token::LT,
+            Token::INT(10),
+            Token::GT,
+            Token::INT(5),
+            Token::SEMICOLON,
+            Token::IF,
+            Token::LPAREN,
+            Token::INT(5),
+            Token::LT,
+            Token::INT(10),
+            Token::RPAREN,
+            Token::LBRRACE,
+            Token::RETURN,
+            Token::TRUE,
+            Token::SEMICOLON,
+            Token::RBRACE,
+            Token::ELSE,
+            Token::LBRRACE,
+            Token::RETURN,
+            Token::FALSE,
+            Token::SEMICOLON,
+            Token::RBRACE,
+            Token::INT(10),
+            Token::EQ,
+            Token::INT(10),
+            Token::SEMICOLON,
+            Token::INT(10),
+            Token::NOT_EQ,
+            Token::INT(9),
             Token::SEMICOLON,
             Token::EOF,
         ];

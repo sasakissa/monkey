@@ -9,6 +9,14 @@ pub enum Token {
     // 演算子
     ASSIGN,
     PLUS,
+    MINUS,
+    BANG,
+    ASTERISK,
+    SLASH,
+    LT,
+    GT,
+    EQ,
+    NOT_EQ,
 
     // デリミタ
     COMMA,
@@ -22,4 +30,9 @@ pub enum Token {
     // キーワード
     FUNCTION,
     LET,
+    TRUE,
+    FALSE,
+    IF,
+    ELSE,
+    RETURN,
 }
