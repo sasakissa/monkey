@@ -3,9 +3,9 @@ use std::str::Chars;
 use crate::token::Token;
 
 pub struct Lexer<'a> {
-    input: Chars<'a>,
-    cur: char,
-    peek: char,
+    pub input: Chars<'a>,
+    pub cur: char,
+    pub peek: char,
 }
 impl<'a> From<&'a str> for Lexer<'a> {
     fn from(input: &'a str) -> Self {
@@ -22,7 +22,7 @@ impl<'a> From<&'a str> for Lexer<'a> {
 
 impl<'a> Lexer<'a> {
     // 1文字読み進める
-    fn read_char(&mut self) -> char {
+    pub fn read_char(&mut self) -> char {
         let c = self.cur;
         self.cur = self.peek;
         self.peek = self.input.next().unwrap_or('\u{0}');
@@ -30,7 +30,7 @@ impl<'a> Lexer<'a> {
     }
 
     // 次の文字を読む
-    fn peek_char(&self) -> char {
+    pub fn peek_char(&self) -> char {
         self.peek
     }
 
@@ -60,9 +60,8 @@ impl<'a> Lexer<'a> {
         res.parse::<i32>().unwrap()
     }
     // 次のトークンを返すｓ
-    fn next_token(&mut self) -> Token {
+    pub fn next_token(&mut self) -> Token {
         self.skip_whitespace();
-        println!("{}", self.cur);
         let token = match self.cur {
             '=' => {
                 if self.peek_char() == '=' {
