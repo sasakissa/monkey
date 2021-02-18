@@ -1,4 +1,4 @@
-use std::{ops::Add, str::Chars};
+use std::str::Chars;
 
 use crate::token::Token;
 
@@ -29,18 +29,26 @@ impl<'a> Lexer<'a> {
         c
     }
 
+    // 空白文字を読み飛ばす
+    fn skip_whitespace(&mut self) {
+        while self.cur == ' ' || self.cur == '\t' || self.cur == '\n' || self.cur == '\r' {
+            self.read_char();
+        }
+    }
+
     fn read_identifier(&mut self) -> String {
         let mut res = String::new();
         while is_letter(self.cur) {
             let c = self.read_char();
             res.push(c);
         }
+
         return res;
     }
     // 次のトークンを返す
     fn next_token(&mut self) -> Token {
-        let c = self.read_char();
-        let token = match c {
+        self.skip_whitespace();
+        let token = match self.cur {
             '=' => Token::ASSIGN,
             ';' => Token::SEMICOLON,
             '(' => Token::LPAREN,
@@ -51,9 +59,10 @@ impl<'a> Lexer<'a> {
             '}' => Token::RBRACE,
             '\u{0}' => Token::EOF,
             _ => {
-                if is_letter(c) {
+                if is_letter(self.cur) {
                     let literal = self.read_identifier();
-                    Token::IDENT(literal)
+                    let token = lookup_ident(&literal);
+                    token
                 } else {
                     Token::Illegal
                 }
@@ -65,6 +74,20 @@ impl<'a> Lexer<'a> {
 
 fn is_letter(c: char) -> bool {
     return 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || c == '_';
+}
+fn keywords(keyword: &String) -> Option<Token> {
+    match keyword.as_ref() {
+        "fn" => Some(Token::FUNCTION),
+        "let" => Some(Token::LET),
+        _ => None,
+    }
+}
+fn lookup_ident(ident: &String) -> Token {
+    if let Some(token) = keywords(ident) {
+        token
+    } else {
+        Token::IDENT(ident.clone())
+    }
 }
 #[cfg(test)]
 mod tests {
