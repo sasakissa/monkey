@@ -2,6 +2,7 @@ use std::str::Chars;
 
 use crate::token::Token;
 
+#[derive(Debug)]
 pub struct Lexer<'a> {
     pub input: Chars<'a>,
     pub cur: char,
