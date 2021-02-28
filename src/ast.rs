@@ -4,10 +4,13 @@ pub enum Statement {
         ident: Expression,
         value: Expression,
     },
+    Return {
+        value: Expression,
+    },
 }
 impl Statement {
-    fn token_litarel(&self) -> String {
-        "".to_string()
+    pub fn token_literal(&self) -> String {
+        format!("{:?}", self)
     }
 }
 #[derive(Clone, Debug)]
@@ -23,7 +26,7 @@ pub struct Program {
 impl Program {
     fn token_literal(&self) -> String {
         if self.statements.len() > 0 {
-            self.statements[0].token_litarel()
+            self.statements[0].token_literal()
         } else {
             "".to_string()
         }

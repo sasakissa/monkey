@@ -45,6 +45,9 @@ impl<'a> Parser<'a> {
             Token::LET => {
                 return self.parse_let_statement();
             }
+            Token::RETURN => {
+                return self.parse_return_statement();
+            }
             _ => None,
         }
     }
@@ -53,11 +56,12 @@ impl<'a> Parser<'a> {
     fn parse_let_statement(&mut self) -> Option<Statement> {
         if let Token::IDENT(name) = &self.peek_token {
             let ident = Expression::Identifiler(name.clone());
-            if self.expect_peek(&Token::ASSIGN) {
+            self.next_token();
+            if !self.expect_peek(&Token::ASSIGN) {
                 return None;
             }
             // TODO: セミコロンに遭遇するまで式を読み飛ばしている
-            while self.cur_token_is(Token::SEMICOLON) {
+            while !self.cur_token_is(Token::SEMICOLON) {
                 self.next_token();
             }
             let value = Expression::String("".to_string());
@@ -68,6 +72,18 @@ impl<'a> Parser<'a> {
         } else {
             return None;
         }
+    }
+
+    // returnb文をパースする
+    fn parse_return_statement(&mut self) -> Option<Statement> {
+        self.next_token();
+        // TODO: セミコロンに遭遇するまで式を読み飛ばしてしまっている
+        while !self.cur_token_is(Token::SEMICOLON) {
+            self.next_token();
+        }
+        return Some(Statement::Return {
+            value: Expression::String("".to_string()),
+        });
     }
 
     fn cur_token_is(&self, expected_token: Token) -> bool {
@@ -113,7 +129,7 @@ mod tests {
     fn test_let_statements() {
         let input = "let x = 5;
         let y = 10;
-        let  838383;
+        let foobar = 838383;
         ";
         let lexer = Lexer::from(input);
         let mut p = Parser::new(lexer);
@@ -133,6 +149,40 @@ mod tests {
             let stmt = program.statements[i].clone();
             if !test_let_statement(stmt, test.to_string()) {
                 return;
+            }
+        }
+    }
+
+    #[test]
+    fn test_return_statements() {
+        let input = "
+        return 5;
+        return 10;
+        return 993322;
+        ";
+        let lexer = Lexer::from(input);
+        let mut parser = Parser::new(lexer);
+
+        let program = parser
+            .parse_program()
+            .unwrap_or_else(|| panic!("parse_program retuned nil"));
+        check_parse_errors(&parser);
+
+        if program.statements.len() != 3 {
+            panic!(&format!(
+                "program.statements does not contain 3 statemetns. got {}",
+                program.statements.len()
+            ));
+        }
+        let expected = vec![""];
+        for i in 0..expected.len() {
+            let statement = program.statements[i].clone();
+            if let Statement::Return { value: v } = statement {
+            } else {
+                panic!(&format!(
+                    "return statement token type is not 'return', got {}",
+                    statement.token_literal()
+                ))
             }
         }
     }
