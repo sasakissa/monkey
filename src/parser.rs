@@ -7,6 +7,7 @@ struct Parser<'a> {
     l: Lexer<'a>,
     cur_token: Token,
     peek_token: Token,
+    errors: Vec<String>,
 }
 
 impl<'a> Parser<'a> {
@@ -15,6 +16,7 @@ impl<'a> Parser<'a> {
             l,
             cur_token: Token::EOF,
             peek_token: Token::EOF,
+            errors: vec![],
         };
         p.next_token();
         p.next_token();
@@ -51,7 +53,7 @@ impl<'a> Parser<'a> {
     fn parse_let_statement(&mut self) -> Option<Statement> {
         if let Token::IDENT(name) = &self.peek_token {
             let ident = Expression::Identifiler(name.clone());
-            if self.expect_peek(Token::ASSIGN) {
+            if self.expect_peek(&Token::ASSIGN) {
                 return None;
             }
             // TODO: セミコロンに遭遇するまで式を読み飛ばしている
@@ -72,23 +74,36 @@ impl<'a> Parser<'a> {
         return self.cur_token == expected_token;
     }
 
-    fn peek_token_is(&self, expected_token: Token) -> bool {
-        return self.peek_token == expected_token;
+    fn peek_token_is(&self, expected_token: &Token) -> bool {
+        return self.peek_token == *expected_token;
     }
 
-    fn expect_peek(&mut self, expected_token: Token) -> bool {
+    fn expect_peek(&mut self, expected_token: &Token) -> bool {
         if self.peek_token_is(expected_token) {
             self.next_token();
             return true;
         } else {
+            self.peek_error(expected_token);
             return false;
         }
+    }
+
+    fn errors(&self) -> Vec<String> {
+        self.errors.clone()
+    }
+
+    fn peek_error(&mut self, expected_token: &Token) {
+        let msg = format!(
+            "expected next token to be {:?}, got {:?} instead, ",
+            expected_token, self.peek_token
+        );
+        self.errors.push(msg);
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::env::var;
+    use core::panic;
 
     use crate::{Expression, Lexer, Statement};
 
@@ -98,16 +113,16 @@ mod tests {
     fn test_let_statements() {
         let input = "let x = 5;
         let y = 10;
-        let foobar = 838383;
+        let  838383;
         ";
         let lexer = Lexer::from(input);
         let mut p = Parser::new(lexer);
         let program = p
             .parse_program()
             .unwrap_or_else(|| panic!("parse_program() returned nul"));
-
+        check_parse_errors(&p);
         if program.statements.len() != 3 {
-            panic!(format!(
+            panic!(&format!(
                 "program.statements does not contain 3 statements. got={}",
                 program.statements.len()
             ))
@@ -116,13 +131,25 @@ mod tests {
         for i in 0..expected.len() {
             let test = expected[i];
             let stmt = program.statements[i].clone();
-            if !testLetStatement(stmt, test.to_string()) {
+            if !test_let_statement(stmt, test.to_string()) {
                 return;
             }
         }
     }
 
-    fn testLetStatement(s: Statement, name: String) -> bool {
+    fn check_parse_errors(parser: &Parser) {
+        let errors = parser.errors();
+        if errors.len() == 0 {
+            return;
+        }
+        eprintln!("parser has {} errors", errors.len());
+        for msg in errors.iter() {
+            eprintln!("parser error: {}", msg);
+        }
+        panic!();
+    }
+
+    fn test_let_statement(s: Statement, name: String) -> bool {
         if let Statement::Let { ident: i, value: v } = s {
             if let Expression::Identifiler(s_name) = i {
                 assert_eq!(s_name, name);
