@@ -6,6 +6,7 @@ mod token;
 use std::io;
 
 pub use ast::Expression;
+pub use ast::Node;
 pub use ast::Program;
 pub use ast::Statement;
 pub use lexer::Lexer;

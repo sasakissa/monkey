@@ -1,4 +1,6 @@
-#[derive(Debug, PartialEq, Clone)]
+use std::ops::Add;
+
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum Token {
     Illegal,
     EOF,
@@ -35,4 +37,39 @@ pub enum Token {
     IF,
     ELSE,
     RETURN,
+}
+
+impl Token {
+    pub fn literal(&self) -> String {
+        let literal = match self {
+            Token::IDENT(i) => i,
+            Token::INT(i) => "int",
+            Token::ASSIGN => "=",
+            Token::PLUS => "+",
+            Token::MINUS => "-",
+            Token::BANG => "!",
+            Token::ASTERISK => "*",
+            Token::SLASH => "/",
+            Token::LT => ">",
+            Token::GT => "<",
+            Token::EQ => "==",
+            Token::NOT_EQ => "!=",
+            Token::COMMA => ",",
+            Token::SEMICOLON => ";",
+
+            Token::LPAREN => "(",
+            Token::RPAREN => ")",
+            Token::LBRRACE => "{",
+            Token::RBRACE => "}",
+            Token::FUNCTION => "fn",
+            Token::LET => "let",
+            Token::TRUE => "true",
+            Token::FALSE => "false",
+            Token::IF => "if",
+            Token::ELSE => "else",
+            Token::RETURN => "return",
+            _ => "",
+        };
+        return literal.to_string();
+    }
 }

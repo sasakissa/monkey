@@ -1,7 +1,18 @@
-use std::error::Error;
+use std::{collections::HashMap, error::Error};
 
+use crate::ast::Node;
 use crate::{Expression, Lexer, Program, Statement, Token};
 
+type prefixParseFn = fn() -> Expression;
+type infixPraseFn = fn(Expression) -> Expression;
+
+const LOWEST: u8 = 1;
+const EQUALS: u8 = 2;
+const LESSGREATER: u8 = 3;
+const SUM: u8 = 4;
+const PRODUCT: u8 = 5;
+const PREFIX: u8 = 6;
+const CALL: u8 = 7;
 #[derive(Debug)]
 struct Parser<'a> {
     l: Lexer<'a>,
@@ -48,7 +59,7 @@ impl<'a> Parser<'a> {
             Token::RETURN => {
                 return self.parse_return_statement();
             }
-            _ => None,
+            _ => self.parse_expression_statement(),
         }
     }
 
@@ -104,6 +115,58 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // 式文を評価します
+    fn parse_expression_statement(&mut self) -> Option<Statement> {
+        let expression = self.parse_expression(LOWEST).unwrap();
+        let statement = Statement::Expression { value: expression };
+        if self.peek_token_is(&Token::SEMICOLON) {
+            self.next_token();
+        }
+        return Some(statement);
+    }
+
+    fn parse_expression(&mut self, procedence: u8) -> Option<Expression> {
+        let prefix = match &self.cur_token {
+            Token::IDENT(ident) => self.parse_identifier(),
+            Token::INT(i) => self.parse_integer_literarl(),
+            Token::BANG => self.parse_prefix_expression(),
+            Token::MINUS => self.parse_prefix_expression(),
+            _ => None,
+        }?;
+        return Some(prefix);
+    }
+
+    fn parse_identifier(&self) -> Option<Expression> {
+        let c_token = &self.cur_token;
+        if let Token::IDENT(ident) = c_token {
+            return Some(Expression::Identifiler(ident.clone()));
+        } else {
+            return None;
+        }
+    }
+
+    fn parse_integer_literarl(&self) -> Option<Expression> {
+        let c_token = &self.cur_token;
+        if let Token::INT(i) = c_token {
+            Some(Expression::Integer(*i))
+        } else {
+            None
+        }
+    }
+
+    fn parse_prefix_expression(&mut self) -> Option<Expression> {
+        let c_token = &self.cur_token.clone();
+        println!("c_tokne: {:?}", c_token.literal());
+        self.next_token();
+        let right = self.parse_expression(PREFIX).unwrap();
+        let prefix_expression = Expression::Prefix {
+            operator: c_token.literal(),
+            right: Box::new(right),
+        };
+
+        return Some(prefix_expression);
+    }
+
     fn errors(&self) -> Vec<String> {
         self.errors.clone()
     }
@@ -121,7 +184,7 @@ impl<'a> Parser<'a> {
 mod tests {
     use core::panic;
 
-    use crate::{Expression, Lexer, Statement};
+    use crate::{Expression, Lexer, Node, Statement};
 
     use super::Parser;
 
@@ -176,13 +239,114 @@ mod tests {
         }
         let expected = vec![""];
         for i in 0..expected.len() {
-            let statement = program.statements[i].clone();
+            let mut statement = program.statements[i].clone();
             if let Statement::Return { value: v } = statement {
             } else {
                 panic!(&format!(
                     "return statement token type is not 'return', got {}",
                     statement.token_literal()
                 ))
+            }
+        }
+    }
+
+    #[test]
+    fn test_identifier_expression() {
+        let input = "foobar";
+        let lexer = Lexer::from(input);
+        let mut parser = Parser::new(lexer);
+        let program = parser
+            .parse_program()
+            .unwrap_or_else(|| panic!("parseer prgram error;"));
+        check_parse_errors(&mut parser);
+
+        if program.statements.len() != 1 {
+            panic!(
+                "program has not enough statements. got {}",
+                program.statements.len()
+            );
+        }
+        let statement = program.statements[0].clone();
+        if let Statement::Expression { value: v } = statement {
+            if let Expression::Identifiler(ident) = v {
+                if ident != "foobar" {
+                    panic!("ident is not {}, got {}", "foobar", ident);
+                }
+            } else {
+                panic!("exp not Identifiler got {:?}", v);
+            }
+        } else {
+            panic!("exp not Identifiler got {:?}", statement);
+        }
+    }
+
+    #[test]
+    fn test_integer_literal_expression() {
+        let input = "5;";
+        let lexer = Lexer::from(input);
+        let mut parser = Parser::new(lexer);
+        let program = parser
+            .parse_program()
+            .unwrap_or_else(|| panic!("parse prgram error"));
+        check_parse_errors(&parser);
+
+        if program.statements.len() != 1 {
+            panic!(
+                "program has not enough statements. got {}",
+                program.statements.len()
+            )
+        }
+        let statement = program.statements[0].clone();
+        if let Statement::Expression { value } = statement {
+            if let Expression::Integer(i) = value {
+                if i == 5 {
+                } else {
+                    panic!("literarl value not {}, got {}", 5, i);
+                }
+            } else {
+                panic!("exp not IntergerExpression. got {:?}", value);
+            }
+        } else {
+            panic!("statement not expression statement. got {:?}", statement);
+        }
+    }
+
+    #[test]
+    fn test_parsing_prefix_expression() {
+        let prefix_tests = vec![("!5", "!", 5), ("-15", "-", 15)];
+        for &(input, exp_operator, exp_integer_value) in prefix_tests.iter() {
+            let lexer = Lexer::from(input);
+            let mut parser = Parser::new(lexer);
+            let program = parser
+                .parse_program()
+                .unwrap_or_else(|| panic!("failed to parse program"));
+            check_parse_errors(&parser);
+            if program.statements.len() != 1 {
+                panic!(
+                    "program.statements doesn nto contain {} statements. got={}",
+                    1,
+                    program.statements.len()
+                )
+            }
+
+            let statement = program.statements[0].clone();
+            if let Statement::Expression { value: expression } = statement {
+                if let Expression::Prefix { operator, right } = expression {
+                    // operatorとintegerのあさーと
+                    if operator != exp_operator {
+                        panic!("operator is not {}. got={}", exp_operator, operator);
+                    }
+                    if !test_integar_litral(*right, exp_integer_value) {
+                        return;
+                    }
+                } else {
+                    panic!(
+                        "ExpressionStatement is not PrefixExpression. got={:?}",
+                        expression
+                    );
+                }
+            } else {
+                panic!("statement is not Expression. got={:?}", statement);
             }
         }
     }
@@ -212,5 +376,19 @@ mod tests {
             eprint!("s.Token is not  'let'.");
             return false;
         }
+    }
+
+    fn test_integar_litral(expression: Expression, exp_int: i32) -> bool {
+        if let Expression::Integer(i) = expression {
+            if i != exp_int {
+                panic!("int value is not {}. got={}", exp_int, i);
+            }
+        } else {
+            panic!(
+                "expression is not Expression::Integer. got={:?}",
+                expression
+            );
+        }
+        return true;
     }
 }
