@@ -546,4 +546,15 @@ mod tests {
         }
         return true;
     }
+
+    fn test_identifier(expression: Expression, value: String) -> bool {
+        if let Expression::Identifiler(ident) = expression {
+            if ident != value {
+                panic!("exp identifiler is not {}. got={}", value, ident);
+            }
+        } else {
+            panic!("exp is not Expression::Identifier. got={:?}", expression);
+        }
+        return true;
+    }
 }
