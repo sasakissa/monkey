@@ -46,6 +46,11 @@ pub enum Expression {
         operator: String,
         right: Box<Expression>,
     },
+    Infix {
+        left: Box<Expression>,
+        operator: String,
+        right: Box<Expression>,
+    },
 }
 
 impl Expression {
@@ -54,7 +59,12 @@ impl Expression {
             Expression::String(v) => format!("{}", v),
             Expression::Integer(v) => format!("{}", v),
             Expression::Identifiler(v) => format!("{}", v),
-            Expression::Prefix { operator, right } => format!("{} {}", operator, right.string()),
+            Expression::Prefix { operator, right } => format!("({}{})", operator, right.string()),
+            Expression::Infix {
+                left,
+                operator,
+                right,
+            } => format!("({} {} {})", left.string(), operator, right.string()),
         }
     }
 }
