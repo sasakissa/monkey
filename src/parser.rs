@@ -145,6 +145,9 @@ impl<'a> Parser<'a> {
             Token::INT(i) => self.parse_integer_literarl(),
             Token::BANG => self.parse_prefix_expression(),
             Token::MINUS => self.parse_prefix_expression(),
+            Token::TRUE | Token::FALSE => self.parse_boolean(),
+            Token::LPAREN => self.parse_grouped_expression(),
+            Token::IF => self.parse_if_expression(),
             _ => {
                 self.no_prefix_parse_fn_error(c_token);
                 None
@@ -188,6 +191,16 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_boolean(&self) -> Option<Expression> {
+        let c_token = &self.cur_token;
+        let res = match c_token {
+            Token::TRUE => Some(Expression::Boolean(true)),
+            Token::FALSE => Some(Expression::Boolean(false)),
+            _ => None,
+        };
+        return res;
+    }
+
     fn parse_prefix_expression(&mut self) -> Option<Expression> {
         let c_token = &self.cur_token.clone();
 
@@ -211,6 +224,57 @@ impl<'a> Parser<'a> {
             operator: c_token.literal(),
             right: Box::new(right),
         })
+    }
+
+    fn parse_grouped_expression(&mut self) -> Option<Expression> {
+        self.next_token();
+        let expression = self.parse_expression(LOWEST);
+        if !self.expect_peek(&Token::RPAREN) {
+            return None;
+        }
+        return expression;
+    }
+
+    fn parse_if_expression(&mut self) -> Option<Expression> {
+        if !self.expect_peek(&Token::LPAREN) {
+            return None;
+        }
+        self.next_token();
+        let condition = self.parse_expression(LOWEST)?;
+        if !self.expect_peek(&Token::RPAREN) {
+            return None;
+        }
+        if !self.expect_peek(&Token::LBRRACE) {
+            return None;
+        }
+
+        let consequence = self.parse_block_statement()?;
+
+        let mut alternative: Option<Box<Statement>> = None;
+        if self.peek_token_is(&Token::ELSE) {
+            self.next_token();
+            if !self.expect_peek(&Token::LBRRACE) {
+                return None;
+            }
+            alternative = Some(Box::new(self.parse_block_statement()?));
+        }
+        return Some(Expression::If {
+            condition: Box::new(condition),
+            consequence: Box::new(consequence),
+            alternative: alternative,
+        });
+    }
+
+    fn parse_block_statement(&mut self) -> Option<Statement> {
+        let mut statements = vec![];
+        self.next_token();
+
+        while !self.cur_token_is(Token::RBRACE) && !self.cur_token_is(Token::EOF) {
+            let statement = self.parse_statement()?;
+            statements.push(statement);
+            self.next_token();
+        }
+        return Some(Statement::Block(statements));
     }
 
     fn errors(&self) -> Vec<String> {
@@ -373,6 +437,42 @@ mod tests {
     }
 
     #[test]
+    fn test_boolean_expression() {
+        let test = vec![("true;", true), ("false;", false)];
+        for &(input, exp_bool) in test.iter() {
+            let lexer = Lexer::from(input);
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse_program().expect("failed to parse program");
+            check_parse_errors(&parser);
+
+            if program.statements.len() != 1 {
+                panic!(
+                    "prgram.statements hos not enoufh statement. got={} ",
+                    program.statements.len()
+                );
+            }
+            let statement = program.statements[0].clone();
+            if let Statement::Expression { value: expression } = statement {
+                if let Expression::Boolean(actual) = expression {
+                    if actual != exp_bool {
+                        panic!("bool is not {}. got={}", exp_bool, actual);
+                    }
+                } else {
+                    panic!(
+                        "expression is not Expression::Boolean. got={:?}",
+                        expression
+                    );
+                }
+            } else {
+                panic!(
+                    "statement is not Statement::Expression. got={:?}",
+                    statement
+                );
+            }
+        }
+    }
+
+    #[test]
     fn test_parsing_prefix_expression() {
         let prefix_tests = vec![("!5", "!", 5), ("-15", "-", 15)];
         for &(input, exp_operator, exp_integer_value) in prefix_tests.iter() {
@@ -423,6 +523,7 @@ mod tests {
             ("5 < 5", 5, "<", 5),
             ("5 == 5", 5, "==", 5),
             ("5 != 5", 5, "!=", 5),
+            // todo: 真偽値への拡張
         ];
         for &(input, exp_left, exp_operator, exp_right) in inputs.iter() {
             let lexer = Lexer::from(input);
@@ -492,6 +593,15 @@ mod tests {
                 "3 + 4 * 5 == 3 * 1 + 4 * 5",
                 "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))",
             ),
+            ("true", "true"),
+            ("false", "false"),
+            ("3 > 5 == false", "((3 > 5) == false)"),
+            ("3 < 5 == true", "((3 < 5) == true)"),
+            ("1 + (2 + 3) + 4", "((1 + (2 + 3)) + 4)"),
+            ("(5 + 5) * 2", "((5 + 5) * 2)"),
+            ("2 / (5 + 5)", "(2 / (5 + 5))"),
+            ("-(5 + 5)", "(-(5 + 5))"),
+            ("!(true == true)", "(!(true == true))"),
         ];
 
         for &(input, expected) in tests.iter() {
@@ -506,6 +616,165 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_if_expression() {
+        let input = "if (x < y) { x }";
+        let lexer = Lexer::from(input);
+        let mut parser = Parser::new(lexer);
+        let program = parser.parse_program().expect("Failed to parse program");
+        check_parse_errors(&parser);
+
+        if program.statements.len() != 1 {
+            panic!(
+                "program.statements does not contain {} statements. got={}",
+                1,
+                program.statements.len()
+            );
+        }
+        let statement = program.statements[0].clone();
+        if let Statement::Expression { value } = statement {
+            if let Expression::If {
+                condition,
+                consequence,
+                alternative,
+            } = value
+            {
+                if !test_infix_expression(
+                    *condition,
+                    "x".to_string(),
+                    "<".to_string(),
+                    "y".to_string(),
+                ) {
+                    return;
+                }
+                if let Statement::Block(cons_statements) = *consequence {
+                    if cons_statements.len() != 1 {
+                        panic!(
+                            "consequene is not 1 statements. got ={}",
+                            cons_statements.len()
+                        );
+                    }
+                    if let Statement::Expression { value } = cons_statements[0].clone() {
+                        if !test_identifier(value, "x".to_string()) {
+                            return;
+                        }
+                    } else {
+                        panic!(
+                            "consequence statement is not Statement::Expression. got={:?}",
+                            cons_statements[0].clone()
+                        );
+                    }
+                } else {
+                    panic!(
+                        "conssequence is not Statement::Block. got={:?}",
+                        consequence
+                    );
+                }
+                if let Some(alternative) = alternative {
+                    panic!("expression alternative was not None. got={:?}", alternative);
+                }
+            } else {
+                panic!("expression is not Expression::If. got={:?}", value);
+            }
+        } else {
+            panic!(
+                "statement is not Statement::Expression. got={:?}",
+                statement
+            );
+        }
+    }
+
+    #[test]
+    fn test_if_else_expression() {
+        let input = "if (x < y) { x } else { y }";
+        let lexer = Lexer::from(input);
+        let mut parser = Parser::new(lexer);
+        let program = parser.parse_program().expect("Failed to parse program");
+        check_parse_errors(&parser);
+
+        if program.statements.len() != 1 {
+            panic!(
+                "program.statements does not contain {} statements. got={}",
+                1,
+                program.statements.len()
+            );
+        }
+        let statement = program.statements[0].clone();
+        if let Statement::Expression { value } = statement {
+            if let Expression::If {
+                condition,
+                consequence,
+                alternative,
+            } = value
+            {
+                if !test_infix_expression(
+                    *condition,
+                    "x".to_string(),
+                    "<".to_string(),
+                    "y".to_string(),
+                ) {
+                    return;
+                }
+                if let Statement::Block(cons_statements) = *consequence {
+                    if cons_statements.len() != 1 {
+                        panic!(
+                            "consequene is not 1 statements. got ={}",
+                            cons_statements.len()
+                        );
+                    }
+                    if let Statement::Expression { value } = cons_statements[0].clone() {
+                        if !test_identifier(value, "x".to_string()) {
+                            return;
+                        }
+                    } else {
+                        panic!(
+                            "consequence statement is not Statement::Expression. got={:?}",
+                            cons_statements[0].clone()
+                        );
+                    }
+                } else {
+                    panic!(
+                        "conssequence is not Statement::Block. got={:?}",
+                        consequence
+                    );
+                }
+                if let Some(alternative) = alternative {
+                    if let Statement::Block(alt_statements) = *alternative {
+                        if alt_statements.len() != 1 {
+                            panic!(
+                                "alternative is not 1 statement. got={}",
+                                alt_statements.len()
+                            );
+                        }
+                        if let Statement::Expression { value } = alt_statements[0].clone() {
+                            if !test_identifier(value, "y".to_string()) {
+                                return;
+                            }
+                        } else {
+                            panic!(
+                                "alternative statement is not Statement::Expression. got={:?}",
+                                alt_statements[0].clone()
+                            )
+                        }
+                    } else {
+                        panic!(
+                            "alternative statement is not Statement::Block. got={:?}",
+                            alternative
+                        );
+                    }
+                } else {
+                    panic!("expression alternative was None.");
+                }
+            } else {
+                panic!("expression is not Expression::If. got={:?}", value);
+            }
+        } else {
+            panic!(
+                "statement is not Statement::Expression. got={:?}",
+                statement
+            );
+        }
+    }
     fn check_parse_errors(parser: &Parser) {
         let errors = parser.errors();
         if errors.len() == 0 {
@@ -556,5 +825,32 @@ mod tests {
             panic!("exp is not Expression::Identifier. got={:?}", expression);
         }
         return true;
+    }
+
+    fn test_infix_expression(
+        expression: Expression,
+        exp_left: String,
+        exp_operator: String,
+        exp_right: String,
+    ) -> bool {
+        if let Expression::Infix {
+            left,
+            operator,
+            right,
+        } = expression
+        {
+            let left_string = left.string();
+            let right_string = right.string();
+            if left_string == exp_left && operator == exp_operator && right_string == exp_right {
+                return true;
+            } else {
+                panic!(
+                    "expected: {} {} {}. got={} {} {}",
+                    exp_left, exp_operator, exp_right, left_string, operator, right_string
+                );
+            }
+        } else {
+            panic!("exprssion is not Expression::Infix. got={:?}", expression);
+        }
     }
 }

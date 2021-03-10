@@ -15,7 +15,9 @@ where
     Expression {
         value: Expression,
     },
+    Block(Vec<Statement>),
 }
+
 impl Node for Statement {
     fn token_literal(&mut self) -> String {
         format!("{:?}", self)
@@ -51,10 +53,17 @@ pub enum Expression {
         operator: String,
         right: Box<Expression>,
     },
+    Boolean(bool),
+    If {
+        condition: Box<Expression>,
+        // Statements::Blockをもつ
+        consequence: Box<Statement>,
+        alternative: Option<Box<Statement>>,
+    },
 }
 
 impl Expression {
-    fn string(&self) -> String {
+    pub fn string(&self) -> String {
         match self {
             Expression::String(v) => format!("{}", v),
             Expression::Integer(v) => format!("{}", v),
@@ -65,6 +74,23 @@ impl Expression {
                 operator,
                 right,
             } => format!("({} {} {})", left.string(), operator, right.string()),
+            Expression::Boolean(b) => format!("{}", b),
+            Expression::If {
+                condition,
+                consequence,
+                alternative,
+            } => {
+                if let Some(alt) = alternative {
+                    format!(
+                        "if {} {} eles {}",
+                        condition.string(),
+                        consequence.string(),
+                        alt.string()
+                    )
+                } else {
+                    format!("if {} {}", condition.string(), consequence.string())
+                }
+            }
         }
     }
 }
