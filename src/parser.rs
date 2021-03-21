@@ -148,6 +148,7 @@ impl<'a> Parser<'a> {
             Token::TRUE | Token::FALSE => self.parse_boolean(),
             Token::LPAREN => self.parse_grouped_expression(),
             Token::IF => self.parse_if_expression(),
+            Token::FUNCTION => self.parse_function(),
             _ => {
                 self.no_prefix_parse_fn_error(c_token);
                 None
@@ -277,6 +278,46 @@ impl<'a> Parser<'a> {
         return Some(Statement::Block(statements));
     }
 
+    fn parse_function(&mut self) -> Option<Expression> {
+        if !self.expect_peek(&Token::LPAREN) {
+            return None;
+        }
+        let parameters = self.parse_function_parameters().expect("parse error");
+        if !self.expect_peek(&Token::LBRRACE) {
+            return None;
+        }
+        let body = self.parse_block_statement().expect("parse error");
+        return Some(Expression::Function {
+            parameters,
+            body: Box::new(body),
+        });
+    }
+
+    fn parse_function_parameters(&mut self) -> Option<Vec<Expression>> {
+        let mut identifiers = vec![];
+        if self.peek_token_is(&Token::RPAREN) {
+            self.next_token();
+            return Some(identifiers);
+        }
+
+        self.next_token();
+        let ident = self.parse_identifier().expect("parse error");
+        identifiers.push(ident);
+
+        while self.peek_token_is(&Token::COMMA) {
+            self.next_token();
+            self.next_token();
+            let ident = self.parse_identifier().expect("parse error");
+            identifiers.push(ident);
+        }
+
+        if !self.expect_peek(&Token::RPAREN) {
+            return None;
+        }
+
+        return Some(identifiers);
+    }
+
     fn errors(&self) -> Vec<String> {
         self.errors.clone()
     }
@@ -308,6 +349,7 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use core::panic;
+    use std::os::macos::raw::stat;
 
     use crate::{Expression, Lexer, Node, Statement};
 
@@ -773,6 +815,124 @@ mod tests {
                 "statement is not Statement::Expression. got={:?}",
                 statement
             );
+        }
+    }
+
+    #[test]
+    fn test_function_litaral_parsing() {
+        let input = "fn(x, y) { x + y; }";
+        let lexer = Lexer::from(input);
+        let mut parser = Parser::new(lexer);
+        let program = parser.parse_program().expect("Failed to parse program");
+        check_parse_errors(&parser);
+
+        if program.statements.len() != 1 {
+            panic!(
+                "program statements does not contain {} statements. got={}",
+                1,
+                program.statements.len()
+            );
+        }
+        let statement = program.statements[0].clone();
+        if let Statement::Expression { value } = statement {
+            if let Expression::Function { parameters, body } = value {
+                if parameters.len() != 2 {
+                    panic!(
+                        "function literal parameters wrong. want 2. got={}",
+                        parameters.len()
+                    );
+                }
+                // parameterのアサート
+                let x = parameters[0].clone();
+                if let Expression::Identifiler(param) = x {
+                    if param != "x" {
+                        panic!("function param is not {}. got={}", "x", param);
+                    }
+                } else {
+                    panic!("function parameter is not Identifier.got={:?}", x);
+                }
+                let y = parameters[1].clone();
+                if let Expression::Identifiler(param) = y {
+                    if param != "y" {
+                        panic!("function param is not {}. got={}", "y", param);
+                    }
+                } else {
+                    panic!("function parameter is not Identifier.got={:?}", y);
+                }
+
+                // bodyのアサート
+                if let Statement::Block(body) = *body {
+                    if body.len() != 1 {
+                        panic!(
+                            "function body statements has not 1 statements. got={}",
+                            body.len()
+                        );
+                    }
+                    if let Statement::Expression { value } = body[0].clone() {
+                        test_infix_expression(
+                            value,
+                            "x".to_string(),
+                            "+".to_string(),
+                            "y".to_string(),
+                        );
+                    }
+                } else {
+                    panic!("function body should hava Statement::Body. got={:?}", body);
+                }
+            } else {
+                panic!(
+                    "program statemnts[0] is noExpression::Function. got={:?}",
+                    value
+                );
+            }
+        } else {
+            panic!(
+                "program statemnts[0] is not Statement::Expression. got={:?}",
+                statement
+            );
+        }
+    }
+
+    #[test]
+    fn test_function_parameter_parsing() {
+        let tests = vec![
+            ("fn() {};", vec![]),
+            ("fn(x) {};", vec!["x"]),
+            ("fn(x, y, z) {};", vec!["x", "y", "z"]),
+        ];
+
+        for (input, expected_params) in tests.into_iter() {
+            let lexer = Lexer::from(input);
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse_program().expect("Failed to parse program");
+            check_parse_errors(&parser);
+
+            let statement = program.statements[0].clone();
+            if let Statement::Expression { value } = statement {
+                if let Expression::Function { parameters, body } = value {
+                    if parameters.len() != expected_params.len() {
+                        panic!(
+                            "length parameters wrong. want {}, got={}",
+                            expected_params.len(),
+                            parameters.len()
+                        );
+                    }
+                    for (i, &exp_ident) in expected_params.iter().enumerate() {
+                        if let Expression::Identifiler(ident) = parameters[i].clone() {
+                            if ident != exp_ident {
+                                panic!("parameter {} is not {}", ident, exp_ident);
+                            }
+                        }
+                    }
+                } else {
+                    panic!("expresison is not Expression::Function. got={:?}", value);
+                }
+            } else {
+                panic!(
+                    "statement is not Statement::Expression. got={:?}",
+                    statement
+                );
+            }
         }
     }
     fn check_parse_errors(parser: &Parser) {

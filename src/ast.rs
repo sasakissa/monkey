@@ -60,6 +60,10 @@ pub enum Expression {
         consequence: Box<Statement>,
         alternative: Option<Box<Statement>>,
     },
+    Function {
+        parameters: Vec<Expression>, // Expression::Identifierのリスト
+        body: Box<Statement>,        // Statement::Block
+    },
 }
 
 impl Expression {
@@ -90,6 +94,9 @@ impl Expression {
                 } else {
                     format!("if {} {}", condition.string(), consequence.string())
                 }
+            }
+            Expression::Function { parameters, body } => {
+                format!("fn ({:?}) {}", parameters, body.string())
             }
         }
     }
