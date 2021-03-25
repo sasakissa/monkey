@@ -21,6 +21,7 @@ fn precedences(token: &Token) -> u8 {
         Token::MINUS => SUM,
         Token::SLASH => PRODUCT,
         Token::ASTERISK => PRODUCT,
+        Token::LPAREN => CALL,
         _ => LOWEST,
     }
 }
@@ -167,6 +168,10 @@ impl<'a> Parser<'a> {
                 | Token::GT => {
                     self.next_token();
                     left_exp = self.parse_infix_expression(left_exp).unwrap();
+                }
+                Token::LPAREN => {
+                    self.next_token();
+                    left_exp = self.parse_call_expression(left_exp);
                 }
                 _ => return Some(left_exp),
             }
@@ -316,6 +321,45 @@ impl<'a> Parser<'a> {
         }
 
         return Some(identifiers);
+    }
+
+    fn parse_call_expression(&mut self, function: Expression) -> Expression {
+        let arguments = self
+            .parse_call_arguments()
+            .expect("Failed to parse call arguments");
+        return Expression::Call {
+            function: Box::new(function),
+            arguments,
+        };
+    }
+
+    fn parse_call_arguments(&mut self) -> Option<Vec<Expression>> {
+        let mut arguments = Vec::new();
+        if self.peek_token_is(&Token::RPAREN) {
+            self.next_token();
+            return Some(arguments);
+        }
+
+        self.next_token();
+        let arg = self
+            .parse_expression(LOWEST)
+            .expect("Failed to parse expression");
+        arguments.push(arg);
+
+        while self.peek_token_is(&Token::COMMA) {
+            self.next_token();
+            self.next_token();
+            let arg = self
+                .parse_expression(LOWEST)
+                .expect("Failed to parse expression");
+            arguments.push(arg);
+        }
+
+        if !self.expect_peek(&Token::RPAREN) {
+            return None;
+        }
+
+        return Some(arguments);
     }
 
     fn errors(&self) -> Vec<String> {
@@ -945,6 +989,52 @@ mod tests {
             eprintln!("parser error: {}", msg);
         }
         panic!();
+    }
+
+    #[test]
+    fn test_call_expression_parsing() {
+        let input = "add(1, 2 * 3, 4 + 5)";
+
+        let lexer = Lexer::from(input);
+        let mut parser = Parser::new(lexer);
+        let program = parser.parse_program().expect("Failed to parse program");
+        check_parse_errors(&parser);
+
+        if program.statements.len() != 1 {
+            panic!(
+                "program.statements does not contain {} statements. got={}",
+                1,
+                program.statements.len()
+            );
+        }
+        let statement = program.statements[0].clone();
+        if let Statement::Expression { value } = statement {
+            if let Expression::Call {
+                function,
+                arguments,
+            } = value
+            {
+                if let Expression::Identifiler(ident) = *function {
+                    if ident != "add" {
+                        panic!("function identifier is not {}. got={}", "add", ident);
+                    }
+                } else {
+                    panic!("function is not Expression::Identifier. got={:?}", function);
+                }
+
+                if arguments.len() != 3 {
+                    panic!("wrong length of argumetns. got={}", arguments.len());
+                }
+            // todo: assert arguments expression
+            } else {
+                panic!("statement is not CallExpression. got={:?}", value);
+            }
+        } else {
+            panic!(
+                "statement is not Statement::Expression. got={:?}",
+                statement
+            );
+        }
     }
 
     fn test_let_statement(s: Statement, name: String) -> bool {

@@ -64,6 +64,10 @@ pub enum Expression {
         parameters: Vec<Expression>, // Expression::Identifierのリスト
         body: Box<Statement>,        // Statement::Block
     },
+    Call {
+        function: Box<Expression>, // Identifier または FunctionLiteral
+        arguments: Vec<Expression>,
+    },
 }
 
 impl Expression {
@@ -98,6 +102,10 @@ impl Expression {
             Expression::Function { parameters, body } => {
                 format!("fn ({:?}) {}", parameters, body.string())
             }
+            Expression::Call {
+                function,
+                arguments,
+            } => format!("{}({:?})", function.string(), arguments),
         }
     }
 }
